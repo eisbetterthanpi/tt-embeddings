@@ -3,9 +3,7 @@ Simple minimal implementation Tensor Train embedding in pytorch, with improved i
 
 TT–layer and TT–embedding from the paper
 [Tensorized Embedding Layers](https://arxiv.org/pdf/1901.10787).<br/>
-[official code](https://github.com/tt-embedding/tt-embeddings)
-
-<br/>
+[official code](https://github.com/tt-embedding/tt-embeddings)<br/>
 
 #### usage:
 
