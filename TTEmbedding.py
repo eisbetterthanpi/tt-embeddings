@@ -56,3 +56,16 @@ class TTEmbedding(nn.Module):
 # x = torch.randint(0, math.prod((3,4,5,6)), (2, 5))
 # out = emb(x)
 # print(out.shape)
+
+# o=lin.weight
+# print(o.mean().item(), o.std().item(), o.min().item(), o.max().item())
+
+# import matplotlib.pyplot as plt
+# plt.rcParams["figure.figsize"] = (4,4)
+# # plt.hist(o.flatten().tolist(), bins=20, alpha=.5, label='context mask')
+# # plt.hist(o[:100,:100].flatten().tolist(), bins=20, alpha=.5, label='context mask')
+# x = torch.randn(100,100)
+# # plt.hist(x.flatten().tolist(), bins=20, alpha=.5, label='context mask')
+# plt.hist([o[:100,:100].flatten().tolist(), x.flatten().tolist()], bins=20, alpha=.5, label='context mask')
+# plt.show()
+
