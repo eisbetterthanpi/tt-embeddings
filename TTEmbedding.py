@@ -1,0 +1,58 @@
+# @title TTLinear
+# Tensor Train embedding https://arxiv.org/pdf/1901.10787
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+def make_einsum(num_tensors):
+    a = 97
+    R = chr(a+25) # 'z'
+    lhs = [chr(a)+R]
+    for i in range(1, num_tensors-1):lhs.append(R+chr(a+i)+R)
+    lhs.append(R+chr(a+num_tensors-1))
+    return ','.join(lhs) + '->' + ''.join([chr(a+i) for i in range(num_tensors)]) # az,zbz,zcz,zd->abcd
+
+class TTLinear(nn.Module):
+    def __init__(self, in_features=None, out_features=None, rank=256, bias=True):
+        super().__init__()
+        lst = [i*j for i, j in zip(in_features, out_features)]
+        last = len(lst)
+        var = last/rank**(1/(2*last))
+        if last == 1: self.params = nn.Parameter(torch.randn(in_features, out_features))
+        else:
+            c=1/last
+            self.params = nn.ParameterList([
+                nn.Parameter(torch.randn(lst[0], rank).clamp(-c,c)*var),
+                *[nn.Parameter(torch.randn(rank, ij, rank).clamp(-c,c)*var) for ij in lst[1:-1]],
+                nn.Parameter(torch.randn(rank, lst[-1]).clamp(-c,c)*var),
+                ])
+        self.einsum_str = make_einsum(last)
+        self.shape = [p for ij in zip(in_features, out_features) for p in ij]
+        self.permute = list(range(0, 2*last - 1, 2)) + list(range(1, 2*last, 2))
+        self.weight = torch.einsum(self.einsum_str, *self.params).reshape(self.shape).permute(self.permute).flatten(0,last-1).flatten(1)
+
+    def forward(self, x):
+        return x.to(self.weight.dtype) @ self.weight
+
+import math
+class TTEmbedding(nn.Module):
+    def __init__(self, in_dim, d_model, rank=256):
+        super().__init__()
+        self.ttlin = TTLinear(in_dim, d_model)
+        self.weight = self.ttlin.weight
+        self.num_classes = math.prod(in_dim)
+
+    def forward(self, x):
+        return self.ttlin(F.one_hot(x, self.num_classes))
+
+
+# lin = TTLinear(in_features=(3,4,5,6), out_features=(2,3,4,5), rank=16)
+# # x = torch.rand(4,math.prod((3,4,5,6)))
+# x = torch.rand(4,7,math.prod((3,4,5,6)))
+# out = lin(x)
+# print(out.shape)
+
+# emb = TTEmbedding((3,4,5,6), (2,3,4,5), rank=16)
+# x = torch.randint(0, math.prod((3,4,5,6)), (2, 5))
+# out = emb(x)
+# print(out.shape)
