@@ -13,23 +13,23 @@ def make_einsum(num_tensors):
     return ','.join(lhs) + '->' + ''.join([chr(a+i) for i in range(num_tensors)]) # az,zbz,zcz,zd->abcd
 
 class TTLinear(nn.Module):
-    def __init__(self, in_features=None, out_features=None, rank=256, bias=True):
+    def __init__(self, in_features=None, out_features=None, rank=256, std=1):
         super().__init__()
-        lst = [i*j for i, j in zip(in_features, out_features)]
+        self.lfeat = len(in_features)
+        if self.lfeat==1: lst = in_features + out_features
+        elif self.lfeat>=2: lst = [i*j for i, j in zip(in_features, out_features)]
         last = len(lst)
-        var = last/rank**(1/(2*last))
-        if last == 1: self.params = nn.Parameter(torch.randn(in_features, out_features))
-        else:
-            c=1/last
-            self.params = nn.ParameterList([
-                nn.Parameter(torch.randn(lst[0], rank).clamp(-c,c)*var),
-                *[nn.Parameter(torch.randn(rank, ij, rank).clamp(-c,c)*var) for ij in lst[1:-1]],
-                nn.Parameter(torch.randn(rank, lst[-1]).clamp(-c,c)*var),
-                ])
+        var = last/rank**(1/(2*(std**.5)*last))
+        c=1/last
+        self.params = nn.ParameterList([
+            nn.Parameter(torch.randn(lst[0], rank).clamp(-c,c)*var),
+            *[nn.Parameter(torch.randn(rank, ij, rank).clamp(-c,c)*var) for ij in lst[1:-1]],
+            nn.Parameter(torch.randn(rank, lst[-1]).clamp(-c,c)*var),
+            ])
         self.einsum_str = make_einsum(last)
         self.shape = [p for ij in zip(in_features, out_features) for p in ij]
-        self.permute = list(range(0, 2*last - 1, 2)) + list(range(1, 2*last, 2))
-        self.weight = torch.einsum(self.einsum_str, *self.params).reshape(self.shape).permute(self.permute).flatten(0,last-1).flatten(1)
+        self.permute = list(range(0, 2*self.lfeat - 1, 2)) + list(range(1, 2*self.lfeat, 2))
+        self.weight = torch.einsum(self.einsum_str, *self.params).reshape(self.shape).permute(self.permute).flatten(0,self.lfeat-1).flatten(1)
 
     def forward(self, x):
         return x.to(self.weight.dtype) @ self.weight
@@ -45,15 +45,18 @@ class TTEmbedding(nn.Module):
     def forward(self, x):
         return self.ttlin(F.one_hot(x, self.num_classes))
 
-
-# lin = TTLinear(in_features=(3,4,5,6), out_features=(2,3,4,5), rank=16)
+# in_features=(3,4,5,6); out_features=(2,3,4,5)
+# in_features=[120]; out_features=[300]
+# rank=16
+# std=.5
+# lin = TTLinear(in_features, out_features, rank, std)
 # # x = torch.rand(4,math.prod((3,4,5,6)))
-# x = torch.rand(4,7,math.prod((3,4,5,6)))
+# x = torch.rand(4,7,math.prod(in_features))
 # out = lin(x)
 # print(out.shape)
 
-# emb = TTEmbedding((3,4,5,6), (2,3,4,5), rank=16)
-# x = torch.randint(0, math.prod((3,4,5,6)), (2, 5))
+# emb = TTEmbedding(in_features, out_features, rank)
+# x = torch.randint(0, math.prod(in_features), (2, 5))
 # out = emb(x)
 # print(out.shape)
 
@@ -64,7 +67,7 @@ class TTEmbedding(nn.Module):
 # plt.rcParams["figure.figsize"] = (4,4)
 # # plt.hist(o.flatten().tolist(), bins=20, alpha=.5, label='context mask')
 # # plt.hist(o[:100,:100].flatten().tolist(), bins=20, alpha=.5, label='context mask')
-# x = torch.randn(100,100)
+# x = torch.randn(100,100)*std
 # # plt.hist(x.flatten().tolist(), bins=20, alpha=.5, label='context mask')
 # plt.hist([o[:100,:100].flatten().tolist(), x.flatten().tolist()], bins=20, alpha=.5, label='context mask')
 # plt.show()
