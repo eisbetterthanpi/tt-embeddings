@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def make_einsum(num_tensors):
     a = 97
@@ -21,18 +22,18 @@ class TTLinear(nn.Module):
         last = len(lst)
         var = last/rank**(1/(2*(std**.5)*last))
         c=1/last
-        self.params = nn.ParameterList([
-            nn.Parameter(torch.randn(lst[0], rank).clamp(-c,c)*var),
+        self.params = nn.ParameterList([nn.Parameter(torch.randn(lst[0], rank).clamp(-c,c)*var),
             *[nn.Parameter(torch.randn(rank, ij, rank).clamp(-c,c)*var) for ij in lst[1:-1]],
-            nn.Parameter(torch.randn(rank, lst[-1]).clamp(-c,c)*var),
-            ])
+            nn.Parameter(torch.randn(rank, lst[-1]).clamp(-c,c)*var)])
         self.einsum_str = make_einsum(last)
         self.shape = [p for ij in zip(in_features, out_features) for p in ij]
         self.permute = list(range(0, 2*self.lfeat - 1, 2)) + list(range(1, 2*self.lfeat, 2))
-        self.weight = torch.einsum(self.einsum_str, *self.params).reshape(self.shape).permute(self.permute).flatten(0,self.lfeat-1).flatten(1)
+    def weight(self): return torch.einsum(self.einsum_str, *self.params).reshape(self.shape).permute(self.permute).flatten(0,self.lfeat-1).flatten(1)
 
     def forward(self, x):
-        return x.to(self.weight.dtype) @ self.weight
+        weight = self.weight()
+        return x.to(weight.dtype) @ weight
+
 
 import math
 class TTEmbedding(nn.Module):
@@ -44,19 +45,22 @@ class TTEmbedding(nn.Module):
 
     def forward(self, x):
         return self.ttlin(F.one_hot(x, self.num_classes))
+# self.out = lambda x: x @ self.tok_emb.weight().T  # weight tying
 
 # in_features=(3,4,5,6); out_features=(2,3,4,5)
 # in_features=[120]; out_features=[300]
 # rank=16
 # std=.5
-# lin = TTLinear(in_features, out_features, rank, std)
+# lin = TTLinear(in_features, out_features, rank, std).to(device)
 # # x = torch.rand(4,math.prod((3,4,5,6)))
-# x = torch.rand(4,7,math.prod(in_features))
+# x = torch.rand(4,7,math.prod(in_features), device=device)
+# print(lin.params[0].device)
 # out = lin(x)
 # print(out.shape)
+# print(lin.ttlin.params[0].device)
 
-# emb = TTEmbedding(in_features, out_features, rank)
-# x = torch.randint(0, math.prod(in_features), (2, 5))
+# emb = TTEmbedding(in_features, out_features, rank).to(device)
+# x = torch.randint(0, math.prod(in_features), (2, 5), device=device)
 # out = emb(x)
 # print(out.shape)
 
