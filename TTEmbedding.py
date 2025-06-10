@@ -37,9 +37,9 @@ class TTLinear(nn.Module):
 
 import math
 class TTEmbedding(nn.Module):
-    def __init__(self, in_dim, d_model, rank=256):
+    def __init__(self, in_dim, d_model, rank=256, std=1):
         super().__init__()
-        self.ttlin = TTLinear(in_dim, d_model, rank, std=1) # https://docs.pytorch.org/docs/stable/generated/torch.nn.Embedding.html
+        self.ttlin = TTLinear(in_dim, d_model, rank, std) # https://docs.pytorch.org/docs/stable/generated/torch.nn.Embedding.html
         self.weight = self.ttlin.weight
         self.num_classes = math.prod(in_dim)
 
